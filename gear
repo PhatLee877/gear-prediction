@@ -272,47 +272,4 @@ Footer.Text = "-- Script By PhatLee --"
 Footer.TextColor3 = Color3.fromRGB(150, 150, 150)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 12
-Footer.TextWrapped = trueKnob.Position = UDim2.new(0, 2, 0, 2)
-Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-Knob.BorderSizePixel = 0
-Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
-
--- Transparent button
-local ClickButton = Instance.new("TextButton")
-ClickButton.Parent = ToggleFrame
-ClickButton.BackgroundTransparency = 1
-ClickButton.Size = UDim2.new(1, 0, 1, 0)
-ClickButton.Text = ""
-
--- Toggle logic
-local function ToggleSwitch()
-    if DropdownButton.Text == "Select Item" then return end
-
-    ToggleOn = not ToggleOn
-    local bgColor = ToggleOn and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(150, 0, 0)
-    local knobPos = ToggleOn and UDim2.new(1, -20, 0, 2) or UDim2.new(0, 2, 0, 2)
-    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {BackgroundColor3 = bgColor}):Play()
-    TweenService:Create(Knob, TweenInfo.new(0.2), {Position = knobPos}):Play()
-
-    if ToggleOn then
-        if not itemTimes[DropdownButton.Text] then
-            itemTimes[DropdownButton.Text] = getUniqueRandomTime()
-        end
-        Label.Text = itemTimes[DropdownButton.Text]
-    else
-        Label.Text = "Stock Predict"
-    end
-end
-ClickButton.MouseButton1Click:Connect(ToggleSwitch)
-
--- Footer
-local Footer = Instance.new("TextLabel")
-Footer.Parent = MainFrame
-Footer.Size = UDim2.new(1, 0, 0, 20)
-Footer.Position = UDim2.new(0, 0, 1, -25)
-Footer.BackgroundTransparency = 1
-Footer.Text = "-- Script By PhatLee --"
-Footer.TextColor3 = Color3.fromRGB(150, 150, 150)
-Footer.Font = Enum.Font.Gotham
-Footer.TextSize = 12
 Footer.TextWrapped = true
