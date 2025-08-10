@@ -6,7 +6,7 @@ local LocalPlayer = Players.LocalPlayer
 local itemTimes = {}
 local usedTimes = {} -- tránh trùng giờ
 
--- Format giờ (đảm bảo phút chia hết cho 5)
+-- Format giờ (đã chỉnh phút chia hết cho 5)
 local function getFormattedTime(offsetMinutes)
     local now = os.time()
     local target = now + offsetMinutes * 60
@@ -33,17 +33,15 @@ local function getFormattedTime(offsetMinutes)
     return label
 end
 
--- Random thời gian hoặc trả về cố định cho Grandmaster
-local function getUniqueRandomTime(itemName)
-    -- Nếu là Grandmaster Sprinkler → luôn trả về 6:50 AM UTC
-    if itemName == "Grandmaster Sprinkler" then
-        return "6:50 AM UTC"
-    end
-
+-- Random thời gian (5-10 giờ) nhưng luôn rơi vào phút chia hết cho 5
+local function getUniqueRandomTime()
     while true do
+        -- random từ 5h đến 10h, nhưng offset tính theo phút
         local offsetHours = math.random(5, 10)
         local offsetMinutes = offsetHours * 60
-        local extraMinutes = math.random(0, 11) * 5 -- phút chia hết cho 5
+
+        -- Thêm random trong khoảng 0-55 phút nhưng chia hết cho 5
+        local extraMinutes = math.random(0, 11) * 5
         local totalOffset = offsetMinutes + extraMinutes
 
         local timeStr = getFormattedTime(totalOffset)
@@ -253,7 +251,7 @@ local function ToggleSwitch()
 
     if ToggleOn then
         if not itemTimes[DropdownButton.Text] then
-            itemTimes[DropdownButton.Text] = getUniqueRandomTime(DropdownButton.Text)
+            itemTimes[DropdownButton.Text] = getUniqueRandomTime()
         end
         Label.Text = itemTimes[DropdownButton.Text]
     else
