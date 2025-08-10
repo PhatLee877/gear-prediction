@@ -1,0 +1,318 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Lưu thời gian random cho từng item
+local itemTimes = {}
+local usedTimes = {} -- tránh trùng giờ
+
+-- Format giờ (đảm bảo phút chia hết cho 5)
+local function getFormattedTime(offsetMinutes)
+    local now = os.time()
+    local target = now + offsetMinutes * 60
+    local dateTable = os.date("!*t", target) -- UTC
+    local today = os.date("!*t", now)
+
+    -- Làm tròn phút chia hết cho 5
+    dateTable.min = dateTable.min - (dateTable.min % 5)
+
+    local ampm = "AM"
+    local hour = dateTable.hour
+    if hour >= 12 then
+        ampm = "PM"
+        if hour > 12 then hour = hour - 12 end
+    elseif hour == 0 then
+        hour = 12
+    end
+
+    local minuteStr = string.format("%02d", dateTable.min)
+    local label = string.format("%d:%s %s UTC", hour, minuteStr, ampm)
+    if dateTable.day ~= today.day then
+        label = label .. " (Tomorrow)"
+    end
+    return label
+end
+
+-- Random thời gian hoặc trả về cố định cho Grandmaster
+local function getUniqueRandomTime(itemName)
+    -- Nếu là Grandmaster Sprinkler → luôn trả về 6:50 AM UTC
+    if itemName == "Grandmaster Sprinkler" then
+        return "6:50 AM UTC"
+    end
+
+    while true do
+        local offsetHours = math.random(5, 10)
+        local offsetMinutes = offsetHours * 60
+        local extraMinutes = math.random(0, 11) * 5 -- phút chia hết cho 5
+        local totalOffset = offsetMinutes + extraMinutes
+
+        local timeStr = getFormattedTime(totalOffset)
+        if not usedTimes[timeStr] then
+            usedTimes[timeStr] = true
+            return timeStr
+        end
+    end
+end
+
+-- GUI chính
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "StockPredictionGUI"
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Popup cảnh báo
+local function showWarning(msg)
+    local warnFrame = Instance.new("Frame")
+    warnFrame.Size = UDim2.new(0, 350, 0, 80)
+    warnFrame.Position = UDim2.new(0.5, -175, 0.5, -40)
+    warnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    warnFrame.BorderSizePixel = 0
+    warnFrame.Parent = ScreenGui
+    Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, 8)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -20, 1, -20)
+    lbl.Position = UDim2.new(0, 10, 0, 10)
+    lbl.Text = msg
+    lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 16
+    lbl.BackgroundTransparency = 1
+    lbl.TextWrapped = true
+    lbl.Parent = warnFrame
+
+    warnFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    warnFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    warnFrame.BackgroundTransparency = 1
+    lbl.TextTransparency = 1
+
+    TweenService:Create(warnFrame, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
+    TweenService:Create(lbl, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+
+    task.delay(2, function()
+        TweenService:Create(warnFrame, TweenInfo.new(0.25), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(lbl, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+        task.wait(0.3)
+        warnFrame:Destroy()
+    end)
+end
+
+-- Frame chính
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 160)
+MainFrame.Position = UDim2.new(0.5, -110, 0.5, -80)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(60, 60, 60)
+
+-- Tiêu đề
+local Title = Instance.new("TextLabel")
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "Stock Prediction 🌱"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+
+-- Dropdown Button
+local DropdownButton = Instance.new("TextButton")
+DropdownButton.Parent = MainFrame
+DropdownButton.Size = UDim2.new(0, 180, 0, 30)
+DropdownButton.Position = UDim2.new(0.5, -90, 0, 40)
+DropdownButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+DropdownButton.BorderSizePixel = 0
+DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+DropdownButton.Text = "Select Item"
+DropdownButton.Font = Enum.Font.Gotham
+DropdownButton.TextSize = 14
+Instance.new("UICorner", DropdownButton).CornerRadius = UDim.new(0, 6)
+
+-- Mũi tên
+local Arrow = Instance.new("TextLabel")
+Arrow.Parent = DropdownButton
+Arrow.Size = UDim2.new(0, 20, 0, 20)
+Arrow.Position = UDim2.new(1, -25, 0.5, -10)
+Arrow.BackgroundTransparency = 1
+Arrow.Text = "▼"
+Arrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+Arrow.Font = Enum.Font.GothamBold
+Arrow.TextSize = 14
+
+-- Dropdown List
+local DropdownFrame = Instance.new("Frame")
+DropdownFrame.Parent = MainFrame
+DropdownFrame.Size = UDim2.new(0, 180, 0, 0)
+DropdownFrame.Position = UDim2.new(0.5, -90, 0, 70)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+DropdownFrame.BorderSizePixel = 0
+DropdownFrame.ClipsDescendants = true
+DropdownFrame.ZIndex = 5
+Instance.new("UICorner", DropdownFrame).CornerRadius = UDim.new(0, 6)
+
+local options = {"Grandmaster Sprinkler", "Levelup Lollipop", "Master Sprinkler"}
+local ToggleOn = false
+
+for i, option in ipairs(options) do
+    local btn = Instance.new("TextButton")
+    btn.Parent = DropdownFrame
+    btn.Size = UDim2.new(1, 0, 0, 25)
+    btn.Position = UDim2.new(0, 0, 0, (i - 1) * 25)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = option
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 12
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 6
+
+    btn.MouseButton1Click:Connect(function()
+        if ToggleOn then
+            showWarning("Please disable before change to another item")
+            return
+        end
+        DropdownButton.Text = option
+        TweenService:Create(DropdownFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 180, 0, 0)}):Play()
+        TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = 0}):Play()
+    end)
+end
+
+-- Dropdown logic
+local open = false
+DropdownButton.MouseButton1Click:Connect(function()
+    open = not open
+    if open then
+        TweenService:Create(DropdownFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 180, 0, #options * 25)}):Play()
+        TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = 180}):Play()
+    else
+        TweenService:Create(DropdownFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 180, 0, 0)}):Play()
+        TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = 0}):Play()
+    end
+end)
+
+-- Stock Predict Frame
+local InnerFrame = Instance.new("Frame")
+InnerFrame.Parent = MainFrame
+InnerFrame.Size = UDim2.new(0, 180, 0, 30)
+InnerFrame.Position = UDim2.new(0.5, -90, 0, 85)
+InnerFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+InnerFrame.BorderSizePixel = 0
+Instance.new("UICorner", InnerFrame).CornerRadius = UDim.new(0, 8)
+
+local Label = Instance.new("TextLabel")
+Label.Parent = InnerFrame
+Label.Size = UDim2.new(1, -60, 1, 0)
+Label.Position = UDim2.new(0, 10, 0, 0)
+Label.Text = "Stock Predict"
+Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+Label.BackgroundTransparency = 1
+Label.Font = Enum.Font.GothamMedium
+Label.TextSize = 14
+Label.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Toggle background
+local ToggleFrame = Instance.new("Frame")
+ToggleFrame.Parent = InnerFrame
+ToggleFrame.Size = UDim2.new(0, 46, 0, 22)
+ToggleFrame.Position = UDim2.new(1, -56, 0.5, -11)
+ToggleFrame.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+ToggleFrame.BorderSizePixel = 0
+Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(1, 0)
+
+-- Knob
+local Knob = Instance.new("Frame")
+Knob.Parent = ToggleFrame
+Knob.Size = UDim2.new(0, 18, 0, 18)
+Knob.Position = UDim2.new(0, 2, 0, 2)
+Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Knob.BorderSizePixel = 0
+Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+
+-- Transparent button
+local ClickButton = Instance.new("TextButton")
+ClickButton.Parent = ToggleFrame
+ClickButton.BackgroundTransparency = 1
+ClickButton.Size = UDim2.new(1, 0, 1, 0)
+ClickButton.Text = ""
+
+-- Toggle logic
+local function ToggleSwitch()
+    if DropdownButton.Text == "Select Item" then return end
+
+    ToggleOn = not ToggleOn
+    local bgColor = ToggleOn and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(150, 0, 0)
+    local knobPos = ToggleOn and UDim2.new(1, -20, 0, 2) or UDim2.new(0, 2, 0, 2)
+    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {BackgroundColor3 = bgColor}):Play()
+    TweenService:Create(Knob, TweenInfo.new(0.2), {Position = knobPos}):Play()
+
+    if ToggleOn then
+        if not itemTimes[DropdownButton.Text] then
+            itemTimes[DropdownButton.Text] = getUniqueRandomTime(DropdownButton.Text)
+        end
+        Label.Text = itemTimes[DropdownButton.Text]
+    else
+        Label.Text = "Stock Predict"
+    end
+end
+ClickButton.MouseButton1Click:Connect(ToggleSwitch)
+
+-- Footer
+local Footer = Instance.new("TextLabel")
+Footer.Parent = MainFrame
+Footer.Size = UDim2.new(1, 0, 0, 20)
+Footer.Position = UDim2.new(0, 0, 1, -25)
+Footer.BackgroundTransparency = 1
+Footer.Text = "-- Script By PhatLee --"
+Footer.TextColor3 = Color3.fromRGB(150, 150, 150)
+Footer.Font = Enum.Font.Gotham
+Footer.TextSize = 12
+Footer.TextWrapped = trueKnob.Position = UDim2.new(0, 2, 0, 2)
+Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Knob.BorderSizePixel = 0
+Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+
+-- Transparent button
+local ClickButton = Instance.new("TextButton")
+ClickButton.Parent = ToggleFrame
+ClickButton.BackgroundTransparency = 1
+ClickButton.Size = UDim2.new(1, 0, 1, 0)
+ClickButton.Text = ""
+
+-- Toggle logic
+local function ToggleSwitch()
+    if DropdownButton.Text == "Select Item" then return end
+
+    ToggleOn = not ToggleOn
+    local bgColor = ToggleOn and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(150, 0, 0)
+    local knobPos = ToggleOn and UDim2.new(1, -20, 0, 2) or UDim2.new(0, 2, 0, 2)
+    TweenService:Create(ToggleFrame, TweenInfo.new(0.2), {BackgroundColor3 = bgColor}):Play()
+    TweenService:Create(Knob, TweenInfo.new(0.2), {Position = knobPos}):Play()
+
+    if ToggleOn then
+        if not itemTimes[DropdownButton.Text] then
+            itemTimes[DropdownButton.Text] = getUniqueRandomTime()
+        end
+        Label.Text = itemTimes[DropdownButton.Text]
+    else
+        Label.Text = "Stock Predict"
+    end
+end
+ClickButton.MouseButton1Click:Connect(ToggleSwitch)
+
+-- Footer
+local Footer = Instance.new("TextLabel")
+Footer.Parent = MainFrame
+Footer.Size = UDim2.new(1, 0, 0, 20)
+Footer.Position = UDim2.new(0, 0, 1, -25)
+Footer.BackgroundTransparency = 1
+Footer.Text = "-- Script By PhatLee --"
+Footer.TextColor3 = Color3.fromRGB(150, 150, 150)
+Footer.Font = Enum.Font.Gotham
+Footer.TextSize = 12
+Footer.TextWrapped = true
